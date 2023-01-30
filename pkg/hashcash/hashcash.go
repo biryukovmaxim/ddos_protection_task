@@ -16,7 +16,7 @@ type Hashcash struct {
 func (h *Hashcash) Compute() ([]byte, int, error) {
 	var nonce int
 	for {
-		// Concatenate the challenge, recipient, sender, message, and nonce
+		// Concatenate the challenge_coder, recipient, sender, message, and nonce
 		data := append(h.Challenge, []byte(h.UniqID+strconv.Itoa(nonce))...)
 
 		// Generate the Hash of the data
@@ -33,7 +33,7 @@ func (h *Hashcash) Compute() ([]byte, int, error) {
 }
 
 func (h *Hashcash) Verify(hashValue []byte, nonce uint64) bool {
-	// Concatenate the challenge, recipient, sender, message, and nonce
+	// Concatenate the challenge_coder, recipient, sender, message, and nonce
 	data := append(h.Challenge, []byte(h.UniqID+strconv.FormatUint(nonce, 10))...)
 
 	// Generate the Hash of the data

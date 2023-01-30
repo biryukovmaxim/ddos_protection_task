@@ -1,4 +1,4 @@
-package challenge
+package challenge_coder
 
 type RequestType = uint8
 
