@@ -6,15 +6,9 @@ import (
 	"strconv"
 )
 
-type Data struct {
-	Recipient string
-	Sender    string
-	Message   string
-}
-
 type Hashcash struct {
 	Challenge  []byte
-	Data       Data
+	UniqID     string
 	Difficulty int
 	HashFunc   crypto.Hash
 }
@@ -23,7 +17,7 @@ func (h *Hashcash) Compute() ([]byte, int, error) {
 	var nonce int
 	for {
 		// Concatenate the challenge, recipient, sender, message, and nonce
-		data := append(h.Challenge, []byte(h.Data.Recipient+h.Data.Sender+h.Data.Message+strconv.Itoa(nonce))...)
+		data := append(h.Challenge, []byte(h.UniqID+strconv.Itoa(nonce))...)
 
 		// Generate the Hash of the data
 		hash := h.HashFunc.New()
@@ -38,9 +32,9 @@ func (h *Hashcash) Compute() ([]byte, int, error) {
 	}
 }
 
-func (h *Hashcash) Verify(hashValue []byte, nonce int) bool {
+func (h *Hashcash) Verify(hashValue []byte, nonce uint64) bool {
 	// Concatenate the challenge, recipient, sender, message, and nonce
-	data := append(h.Challenge, []byte(h.Data.Recipient+h.Data.Sender+h.Data.Message+strconv.Itoa(nonce))...)
+	data := append(h.Challenge, []byte(h.UniqID+strconv.FormatUint(nonce, 10))...)
 
 	// Generate the Hash of the data
 	hash := h.HashFunc.New()
@@ -59,10 +53,10 @@ func (h *Hashcash) Verify(hashValue []byte, nonce int) bool {
 	return true
 }
 
-func NewHashcash(challenge []byte, data Data, difficulty int, hashFunc crypto.Hash) *Hashcash {
+func NewHashcash(challenge []byte, uniq string, difficulty int, hashFunc crypto.Hash) *Hashcash {
 	return &Hashcash{
 		Challenge:  challenge,
-		Data:       data,
+		UniqID:     uniq,
 		Difficulty: difficulty,
 		HashFunc:   hashFunc,
 	}
