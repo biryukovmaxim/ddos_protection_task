@@ -11,6 +11,7 @@ const (
 
 const (
 	ChallengeSize = 8
+	Difficulty    = 22
 )
 
 type Solution struct {

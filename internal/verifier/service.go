@@ -23,7 +23,7 @@ type Service struct {
 }
 
 func NewService(randSize int, difficlty int, hashFunc crypto.Hash, wl Whitelist) *Service {
-	return &Service{randSize: randSize, difficulty: difficlty, hashFunc: hashFunc, wl: wl}
+	return &Service{randSize: randSize, difficulty: difficlty, hashFunc: hashFunc, wl: wl, challenges: cmap.New[[]byte]()}
 }
 
 func (s *Service) CreateChallenge(socket string) ([]byte, error) {

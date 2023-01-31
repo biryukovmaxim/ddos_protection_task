@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"crypto"
 	"strconv"
+
+	log "github.com/sirupsen/logrus"
 )
 
 type Hashcash struct {
@@ -13,11 +15,12 @@ type Hashcash struct {
 	HashFunc   crypto.Hash
 }
 
-func (h *Hashcash) Compute() ([]byte, int, error) {
-	var nonce int
+func (h *Hashcash) Compute() ([]byte, uint64, error) {
+	log.Debug("start computing hash")
+	var nonce uint64
 	for {
-		// Concatenate the challenge, recipient, sender, message, and nonce
-		data := append(h.Challenge, []byte(h.UniqID+strconv.Itoa(nonce))...)
+		// Concatenate the challenge, address, and nonce
+		data := append(h.Challenge, []byte(h.UniqID+strconv.FormatUint(nonce, 10))...)
 
 		// Generate the Hash of the data
 		hash := h.HashFunc.New()
@@ -26,6 +29,7 @@ func (h *Hashcash) Compute() ([]byte, int, error) {
 
 		// Check if the hash meets the difficulty
 		if CheckDifficulty(hashValue, h.Difficulty) {
+			log.Debug("finish computing hash")
 			return hashValue, nonce, nil
 		}
 		nonce++

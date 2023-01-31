@@ -1,6 +1,7 @@
 package challenge
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"net"
@@ -10,26 +11,40 @@ import (
 type Client struct {
 	localAddr          *net.UDPAddr
 	conn               *net.UDPConn
-	challengeResolveFn func(challenge []byte) (hash []byte, nonce uint64, err error)
+	challengeResolveFn func(challenge []byte, myAddress string) (hash []byte, nonce uint64, err error)
 }
 
-func NewClient(localAddr *net.UDPAddr, conn *net.UDPConn, challengeResolveFn func(challenge []byte) (hash []byte, nonce uint64, err error)) *Client {
-	return &Client{localAddr: localAddr, conn: conn, challengeResolveFn: challengeResolveFn}
+func NewClient(localAddr *net.UDPAddr, challengeResolveFn func(challenge []byte, myAddress string) (hash []byte, nonce uint64, err error)) *Client {
+	return &Client{localAddr: localAddr, challengeResolveFn: challengeResolveFn}
 }
 
-func (c *Client) requestChallenge() ([]byte, error) {
+func (c *Client) requestChallenge() ([]byte, string, error) {
 	_, err := c.conn.Write(encodeRequestChallenge())
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	buf := make([]byte, 1024)
 	_, err = c.conn.Read(buf)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	challenge := buf[1:ChallengeSize]
+	reader := bytes.NewReader(buf)
+	_, _ = reader.ReadByte()
 
-	return challenge, nil
+	challenge := make([]byte, ChallengeSize)
+	_, _ = reader.Read(challenge)
+
+	ip := make(net.IP, 4)
+	_, _ = reader.Read(ip)
+	portBts := make([]byte, 2)
+	_, _ = reader.Read(portBts)
+
+	port := binary.BigEndian.Uint16(portBts)
+	address := (&net.TCPAddr{
+		IP:   ip,
+		Port: int(port),
+	}).String()
+	return challenge, address, nil
 }
 
 func (c *Client) sendAndCheckSolution(hash []byte, nonce uint64) (success bool, err error) {
@@ -57,12 +72,12 @@ func (c *Client) Connect(challengeServerAddress, address string) (*net.TCPConn, 
 		return nil, err
 	}
 	defer c.conn.Close()
-	challenge, err := c.requestChallenge()
+	challenge, myAddress, err := c.requestChallenge()
 	if err != nil {
 		return nil, err
 	}
 
-	hash, nonce, err := c.challengeResolveFn(challenge)
+	hash, nonce, err := c.challengeResolveFn(challenge, myAddress)
 	if err != nil {
 		return nil, err
 	}

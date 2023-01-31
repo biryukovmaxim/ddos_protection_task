@@ -2,36 +2,38 @@ package main
 
 import (
 	"bufio"
+	"crypto"
+	_ "crypto/sha256"
 	"fmt"
-	"net"
 	"os"
-	"strconv"
-	"time"
+
+	"ddos_protection_task/pkg/challenge"
+	"ddos_protection_task/pkg/hashcash"
+
+	log "github.com/sirupsen/logrus"
 )
 
 var (
-	outgoingPort = os.Getenv("OUT_PORT")
-	destination  = os.Getenv("DEST")
+	destination      = os.Getenv("DEST")
+	challengeAddress = os.Getenv("CHALLENGE_ADDRESS")
 )
 
-func main() {
+func init() {
+	log.SetFormatter(&log.TextFormatter{
+		//TimestampFormat: "2006-01-02 15:04:05",
+		FullTimestamp: true,
+	})
+	log.SetLevel(log.DebugLevel)
+}
 
-	port, err := strconv.Atoi(outgoingPort)
+func main() {
+	challengeResolveFn := func(challengeBts []byte, myAddress string) (hash []byte, nonce uint64, err error) {
+		return hashcash.NewHashcash(challengeBts, myAddress, challenge.Difficulty, crypto.SHA256).Compute()
+	}
+	client := challenge.NewClient(nil, challengeResolveFn)
+	conn, err := client.Connect(challengeAddress, destination)
 	if err != nil {
 		panic(err)
-	}
-	dialer := net.Dialer{
-		Timeout: 3 * time.Second,
-		LocalAddr: &net.TCPAddr{
-			IP:   nil,
-			Port: port,
-			Zone: "",
-		},
-	}
-	conn, err := dialer.Dial("tcp", destination)
-	if err != nil {
-		fmt.Println(err)
-		return
 	}
 	defer conn.Close()
 	addr := conn.LocalAddr()
