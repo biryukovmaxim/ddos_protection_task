@@ -15,6 +15,7 @@ var (
 )
 
 func main() {
+
 	port, err := strconv.Atoi(outgoingPort)
 	if err != nil {
 		panic(err)

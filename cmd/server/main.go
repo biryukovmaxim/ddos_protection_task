@@ -7,7 +7,7 @@ import (
 	"os"
 
 	"ddos_protection_task/internal/verifier"
-	"ddos_protection_task/pkg/challenge_coder"
+	"ddos_protection_task/pkg/challenge"
 
 	"github.com/dropbox/goebpf"
 	log "github.com/sirupsen/logrus"
@@ -71,8 +71,8 @@ func main() {
 		}
 	}()
 
-	vf := verifier.NewService(challenge_coder.ChallengeSize, 4, crypto.SHA256, whitelist)
-	server := challenge_coder.NewServer(vf)
+	vf := verifier.NewService(challenge.ChallengeSize, 4, crypto.SHA256, whitelist)
+	server := challenge.NewServer(vf)
 	udpServer, err := net.ListenPacket("udp", ":1053")
 	if err != nil {
 		log.Fatal(err)

@@ -1,4 +1,4 @@
-package challenge_coder
+package challenge
 
 import (
 	"encoding/binary"

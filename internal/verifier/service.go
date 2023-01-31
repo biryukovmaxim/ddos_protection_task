@@ -59,7 +59,7 @@ func (s *Service) CheckSolution(socket string, hash []byte, nonce uint64) (bool,
 		return successful
 	})
 	if notFound {
-		return false, fmt.Errorf("challenge_coder for %q not found", socket)
+		return false, fmt.Errorf("challenge for %q not found", socket)
 	}
 	if insertedErr != nil {
 		return false, insertedErr
