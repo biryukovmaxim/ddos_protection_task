@@ -8,10 +8,11 @@ import (
 	"os"
 	_ "sync"
 
+	"ddos_protection_task/bpf/xdp_firewall"
 	_ "ddos_protection_task/internal/verifier"
 	_ "ddos_protection_task/pkg/challenge"
 
-	goebpf "github.com/cilium/ebpf"
+	"github.com/cilium/ebpf"
 
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
@@ -29,6 +30,12 @@ func init() {
 	log.SetLevel(log.DebugLevel)
 }
 
+type FirewallEbpfProgram interface {
+	Whitelist() (*ebpf.Map, error)
+	Program() (*ebpf.Program, error)
+	Close() error
+}
+
 func main() {
 	//inerfaces, err := net.Interfaces()
 	//if err != nil {
@@ -41,17 +48,21 @@ func main() {
 	}); err != nil {
 		log.WithError(err).Error("set rlimit")
 	}
-	collection, err := goebpf.LoadCollection(pathToElf)
+	var (
+		program FirewallEbpfProgram
+		err     error
+	)
+	program, err = xdp_firewall.NewFirewallProgram()
 	if err != nil {
-		panic(err)
+		log.WithError(err).Fatalf("loading bpf program")
 	}
-	collection.Close()
-	//xdp := bpf.XDPProgram("outer_firewall")
-	//if err := xdp.Load(); err != nil {
-	//	log.Fatalf("xdp.Load(): %v", err)
-	//}
-	//whitelist := bpf.GetMapByName("WHITE_LIST")
-	//defer whitelist.Close()
+	defer program.Close()
+
+	whitelist, err := program.Whitelist()
+	if err != nil {
+		log.WithError(err).Fatalf("loading whitelist map")
+	}
+	defer whitelist.Close()
 	//// Attach to interface
 	//if err := xdp.Attach("lo"); err != nil {
 	//	log.Fatalf("xdp.Attach(): %v", err)
