@@ -7,6 +7,7 @@ const __u8 IPPROTO_TCP = 6;		/* Transmission Control Protocol	*/
 struct pair {
     __u32 ip;
     __u16 port;
+    __u16 padding;
 };
 /* Define an LRU hash map for storing packet count by source IPv4 address */
 struct bpf_map_def SEC("maps") whitelist = {
@@ -77,6 +78,7 @@ int tcp_firewall(struct xdp_md *ctx) {
 
     key.ip = iph->saddr;
     key.port = tcph->source;
+    key.padding = 0;
     value = bpf_map_lookup_elem(&whitelist, &key);
     if (value) {
         return XDP_PASS;
