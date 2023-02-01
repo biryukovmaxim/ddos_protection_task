@@ -6,6 +6,7 @@ import (
 	_ "crypto/sha256"
 	"fmt"
 	"os"
+	"time"
 
 	"ddos_protection_task/pkg/challenge"
 	"ddos_protection_task/pkg/hashcash"
@@ -31,13 +32,13 @@ func main() {
 		return hashcash.NewHashcash(challengeBts, myAddress, challenge.Difficulty, crypto.SHA256).Compute()
 	}
 	client := challenge.NewClient(nil, challengeResolveFn)
+	time.Sleep(5 * time.Second)
 	conn, err := client.Connect(challengeAddress, destination)
 	if err != nil {
 		panic(err)
 	}
 	defer conn.Close()
-	addr := conn.LocalAddr()
-	fmt.Println(addr)
+	fmt.Println("connected")
 	message, err := bufio.NewReader(conn).ReadString('\n')
 	if err != nil {
 		fmt.Println(err)

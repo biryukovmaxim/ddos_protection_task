@@ -4,6 +4,7 @@ import (
 	"crypto"
 	"crypto/rand"
 	"fmt"
+	"net"
 
 	"ddos_protection_task/pkg/hashcash"
 
@@ -11,7 +12,7 @@ import (
 )
 
 type Whitelist interface {
-	Insert(interface{}, interface{}) error
+	Insert(addr *net.TCPAddr) error
 }
 
 type Service struct {
@@ -37,29 +38,33 @@ func (s *Service) CreateChallenge(socket string) ([]byte, error) {
 	return challenge, nil
 }
 
-func (s *Service) CheckSolution(socket string, hash []byte, nonce uint64) (bool, error) {
+func (s *Service) CheckSolution(addr net.UDPAddr, hash []byte, nonce uint64) (bool, error) {
 	var (
 		successful  bool
 		notFound    bool
 		insertedErr error
 	)
 
-	s.challenges.RemoveCb(socket, func(key string, challenge []byte, exists bool) bool {
+	s.challenges.RemoveCb(addr.String(), func(key string, challenge []byte, exists bool) bool {
 		if !exists {
 			notFound = true
 			return false
 		}
-		hk := hashcash.NewHashcash(challenge, socket, s.difficulty, s.hashFunc)
+		hk := hashcash.NewHashcash(challenge, addr.String(), s.difficulty, s.hashFunc)
 		successful = hk.Verify(hash, nonce)
-
-		insertedErr = s.wl.Insert(socket, struct{}{})
+		tcp := &net.TCPAddr{
+			IP:   addr.IP,
+			Port: addr.Port,
+			Zone: addr.Zone,
+		}
+		insertedErr = s.wl.Insert(tcp)
 		if insertedErr != nil {
 			return false
 		}
 		return successful
 	})
 	if notFound {
-		return false, fmt.Errorf("challenge for %q not found", socket)
+		return false, fmt.Errorf("challenge for %q not found", addr.String())
 	}
 	if insertedErr != nil {
 		return false, insertedErr

@@ -1,19 +1,22 @@
 package main
 
 import (
-	_ "crypto"
+	"bytes"
+	"crypto"
 	_ "crypto/sha256"
+	"encoding/binary"
 	"fmt"
 	"net"
 	"os"
-	_ "sync"
+	"sync"
 
 	"ddos_protection_task/bpf/xdp_firewall"
-	_ "ddos_protection_task/internal/verifier"
-	_ "ddos_protection_task/pkg/challenge"
+	"ddos_protection_task/internal/bpf_map_adapter"
+	"ddos_protection_task/internal/verifier"
+	"ddos_protection_task/pkg/challenge"
 
 	"github.com/cilium/ebpf"
-
+	"github.com/cilium/ebpf/link"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 )
@@ -37,6 +40,10 @@ type FirewallEbpfProgram interface {
 }
 
 func main() {
+	iface, err := net.InterfaceByName("lo")
+	if err != nil {
+		log.WithError(err).Fatalf("lookup network iface %q", "lo")
+	}
 	//inerfaces, err := net.Interfaces()
 	//if err != nil {
 	//	log.WithError(err).Fatal("getting net interfaces")
@@ -49,94 +56,126 @@ func main() {
 		log.WithError(err).Error("set rlimit")
 	}
 	var (
-		program FirewallEbpfProgram
-		err     error
+		firewall FirewallEbpfProgram
 	)
-	program, err = xdp_firewall.NewFirewallProgram()
+	firewall, err = xdp_firewall.NewFirewallProgram()
 	if err != nil {
 		log.WithError(err).Fatalf("loading bpf program")
 	}
-	defer program.Close()
+	defer firewall.Close()
 
-	whitelist, err := program.Whitelist()
+	whitelist, err := firewall.Whitelist()
 	if err != nil {
 		log.WithError(err).Fatalf("loading whitelist map")
 	}
 	defer whitelist.Close()
-	//// Attach to interface
-	//if err := xdp.Attach("lo"); err != nil {
-	//	log.Fatalf("xdp.Attach(): %v", err)
-	//}
-	//defer xdp.Detach()
+	program, err := firewall.Program()
+	if err != nil {
+		log.WithError(err).Fatalf("loading program", program)
+	}
+	l, err := link.AttachXDP(link.XDPOptions{
+		Program:   program,
+		Interface: iface.Index,
+		Flags:     link.XDPGenericMode,
+	})
+	defer l.Close()
 
-	//listener, err := net.Listen("tcp", "localhost:5051")
-	//if err != nil {
-	//	log.WithError(err).Fatalf("start listeing")
-	//}
-	//defer listener.Close()
-	//
-	//wg := &sync.WaitGroup{}
-	//wg.Add(1)
-	//log.Info("start listening incoming tcp conns")
-	//go func() {
-	//	defer wg.Done()
-	//	for {
-	//		conn, err := listener.Accept()
-	//		if err != nil {
-	//			log.WithError(err).Warn("accepting incoming conn")
-	//			continue
-	//		}
-	//		go handleRequest(conn)
-	//	}
-	//}()
-	//
-	//vf := verifier.NewService(challenge.ChallengeSize, challenge.Difficulty, crypto.SHA256, MockMap{map[interface{}]interface{}{}})
-	//server := challenge.NewServer(vf)
-	//udpServer, err := net.ListenPacket("udp", ":1053")
-	//if err != nil {
-	//	log.Fatal(err)
-	//}
-	//defer udpServer.Close()
-	//log.Info("start listening incoming udp frames")
-	//wg.Add(1)
-	//go func() {
-	//	defer wg.Done()
-	//	for {
-	//		buf := make([]byte, 1024)
-	//		_, addr, err := udpServer.ReadFrom(buf)
-	//		if err != nil {
-	//			continue
-	//		}
-	//		go func(buf []byte, addr net.Addr) {
-	//			resp, err := server.ProcessRequest(addr.(*net.UDPAddr), buf)
-	//			if err != nil {
-	//				log.WithError(err).Error("processing udp request")
-	//				return
-	//			}
-	//			_, err = udpServer.WriteTo(resp, addr)
-	//			if err != nil {
-	//				log.WithError(err).Error("sending udp response")
-	//			}
-	//
-	//		}(buf, addr)
-	//	}
-	//}()
-	//wg.Wait()
+	listener, err := net.Listen("tcp", "localhost:5051")
+	if err != nil {
+		log.WithError(err).Fatalf("start listeing")
+	}
+	defer listener.Close()
+
+	go debugMap(whitelist)
+	whitelistAdapter := bpf_map_adapter.NewAdapter(whitelist)
+
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	log.Info("start listening incoming tcp conns")
+	go func() {
+		defer wg.Done()
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				log.WithError(err).Warn("accepting incoming conn")
+				continue
+			}
+			go handleRequest(conn, whitelistAdapter)
+		}
+	}()
+
+	vf := verifier.NewService(challenge.ChallengeSize, challenge.Difficulty, crypto.SHA256, whitelistAdapter)
+	server := challenge.NewServer(vf)
+	udpServer, err := net.ListenPacket("udp", ":1053")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer udpServer.Close()
+	log.Info("start listening incoming udp frames")
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for {
+			buf := make([]byte, 1024)
+			_, addrI, err := udpServer.ReadFrom(buf)
+			if err != nil {
+				continue
+			}
+			addr := addrI.(*net.UDPAddr)
+			func(buf []byte, addr net.UDPAddr) {
+				// todo addr overrided by process request
+				addr2, _ := net.ResolveUDPAddr("udp4", addr.String())
+				resp, err := server.ProcessRequest(addr, buf)
+				if err != nil {
+					log.WithError(err).Error("processing udp request")
+					return
+				}
+				_, err = udpServer.WriteTo(resp, addr2)
+				if err != nil {
+					log.WithError(err).Error("sending udp response")
+				}
+			}(buf, *addr)
+		}
+	}()
+	wg.Wait()
 }
 
-func handleRequest(conn net.Conn) {
+func handleRequest(conn net.Conn, p *bpf_map_adapter.Adapter) {
 	defer conn.Close()
+	defer func(p *bpf_map_adapter.Adapter, addr *net.TCPAddr) {
+		err := p.Delete(addr)
+		if err != nil {
+			log.WithError(err).Error("delete from whitelist map")
+		}
+	}(p, conn.RemoteAddr().(*net.TCPAddr))
+
 	log.Debug("new tcp connection")
 	remoteAddr := conn.RemoteAddr().String()
 	log.Debug(remoteAddr)
 	fmt.Fprintln(conn, "Hello, World!")
 }
 
-type MockMap struct {
-	storage map[interface{}]interface{}
-}
+func debugMap(p *ebpf.Map) {
+	for {
+		iterator := p.Iterate()
+		var (
+			key   [8]byte
+			value uint32
+		)
 
-func (m MockMap) Insert(i interface{}, i2 interface{}) error {
-	m.storage[i] = i2
-	return nil
+		for iterator.Next(&key, &value) {
+			reader := bytes.NewReader(key[:])
+			ip := make([]byte, 4)
+			reader.Read(ip)
+			portBts := make([]byte, 2)
+			reader.Read(portBts)
+			//lport := binary.LittleEndian.Uint16(portBts)
+			rport := binary.BigEndian.Uint16(portBts)
+
+			//log.Debugf("ip: %s, leport: %d, value: %d", net.IP(ip).String(), lport, value)
+			log.Debugf("ip: %s, righnt port: %d, value: %d", net.IP(ip).String(), rport, value)
+
+		}
+		//time.Sleep(1 * time.Second)
+	}
 }

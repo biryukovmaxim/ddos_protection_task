@@ -53,11 +53,12 @@ int tcp_firewall(struct xdp_md *ctx) {
     if (eth->h_proto != bpf_htons(ETH_P_IP)) {
         return XDP_PASS;
     }
+    data += sizeof(*eth);
 
-   struct iphdr *iph = (void *)(eth + 1);
-   	if ((void *)(iph + 1) > data_end) {
-   		return XDP_ABORTED;
-   	}
+    struct iphdr *ip = data;
+     if (data + sizeof(*ip) > data_end) {
+       return XDP_ABORTED;
+     }
 
     if (iph->version != 4) {
         return XDP_DROP;
@@ -67,13 +68,17 @@ int tcp_firewall(struct xdp_md *ctx) {
         return XDP_PASS;
     }
 
-    struct tcphdr *tcph = (void *)(iph + 1);
-    if ((void *)(tcph + 1) > data_end) {
-        return XDP_ABORTED;
-    }
+     data += iph->ihl * 4;
+     struct tcphdr *tcph = data;
+     if (data + sizeof(*tcph) > data_end) {
+       return XDP_ABORTED;
+     }
 
     if (!(tcph->syn)) {
         return XDP_PASS;
+    }
+    if (tcph->dest != 5051) {
+       return XDP_PASS;
     }
 
     key.ip = iph->saddr;

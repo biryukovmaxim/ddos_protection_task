@@ -15,7 +15,7 @@ const (
 
 type Verifier interface {
 	CreateChallenge(socket string) ([]byte, error)
-	CheckSolution(socket string, hash []byte, nonce uint64) (bool, error)
+	CheckSolution(addr net.UDPAddr, hash []byte, nonce uint64) (bool, error)
 }
 
 type Server struct {
@@ -26,7 +26,7 @@ func NewServer(verifier Verifier) *Server {
 	return &Server{verifier: verifier}
 }
 
-func (s *Server) ProcessRequest(addr *net.UDPAddr, frame []byte) ([]byte, error) {
+func (s *Server) ProcessRequest(addr net.UDPAddr, frame []byte) ([]byte, error) {
 	socket := addr.String()
 	reqType, reqI, err := DecodePacket(frame)
 	if err != nil {
@@ -42,7 +42,7 @@ func (s *Server) ProcessRequest(addr *net.UDPAddr, frame []byte) ([]byte, error)
 		return encodeChallenge(challenge, addr), nil
 	case SolutionType:
 		req := reqI.(Solution)
-		solution, err := s.verifier.CheckSolution(socket, req.Hash, req.Nonce)
+		solution, err := s.verifier.CheckSolution(addr, req.Hash, req.Nonce)
 		if err != nil {
 			return nil, err
 		}
@@ -80,7 +80,7 @@ func DecodePacket(buf []byte) (RequestType, any, error) {
 	}
 }
 
-func encodeChallenge(challenge []byte, addr *net.UDPAddr) []byte {
+func encodeChallenge(challenge []byte, addr net.UDPAddr) []byte {
 	buf := bytes.NewBuffer(make([]byte, 0, 15))
 
 	portBytes := make([]byte, 2)
