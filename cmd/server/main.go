@@ -7,8 +7,8 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
-	"os"
 	"sync"
+	"time"
 
 	"ddos_protection_task/bpf/xdp_firewall"
 	"ddos_protection_task/internal/bpf_map_adapter"
@@ -17,12 +17,8 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
+	"github.com/cilium/ebpf/rlimit"
 	log "github.com/sirupsen/logrus"
-	"golang.org/x/sys/unix"
-)
-
-var (
-	pathToElf = os.Getenv("ELF_PATH")
 )
 
 func init() {
@@ -44,16 +40,13 @@ func main() {
 	if err != nil {
 		log.WithError(err).Fatalf("lookup network iface %q", "lo")
 	}
-	//inerfaces, err := net.Interfaces()
-	//if err != nil {
-	//	log.WithError(err).Fatal("getting net interfaces")
-	//}
-	//log.Debugf("%+v", inerfaces)
-	if err := unix.Setrlimit(unix.RLIMIT_MEMLOCK, &unix.Rlimit{
-		Cur: unix.RLIM_INFINITY,
-		Max: unix.RLIM_INFINITY,
-	}); err != nil {
-		log.WithError(err).Error("set rlimit")
+	inerfaces, err := net.Interfaces()
+	if err != nil {
+		log.WithError(err).Fatal("getting net interfaces")
+	}
+	log.Debugf("%+v", inerfaces)
+	if err := rlimit.RemoveMemlock(); err != nil {
+		log.WithError(err).Fatal("set rlimit")
 	}
 	var (
 		firewall FirewallEbpfProgram
@@ -71,13 +64,16 @@ func main() {
 	defer whitelist.Close()
 	program, err := firewall.Program()
 	if err != nil {
-		log.WithError(err).Fatalf("loading program", program)
+		log.WithError(err).Fatalf("loading program")
 	}
+	defer program.Close()
 	l, err := link.AttachXDP(link.XDPOptions{
 		Program:   program,
 		Interface: iface.Index,
-		Flags:     link.XDPGenericMode,
 	})
+	if err != nil {
+		log.WithError(err).Fatalf("link program")
+	}
 	defer l.Close()
 
 	listener, err := net.Listen("tcp", "localhost:5051")
@@ -169,13 +165,28 @@ func debugMap(p *ebpf.Map) {
 			reader.Read(ip)
 			portBts := make([]byte, 2)
 			reader.Read(portBts)
-			//lport := binary.LittleEndian.Uint16(portBts)
-			rport := binary.BigEndian.Uint16(portBts)
+			lport := binary.LittleEndian.Uint16(portBts)
 
-			//log.Debugf("ip: %s, leport: %d, value: %d", net.IP(ip).String(), lport, value)
-			log.Debugf("ip: %s, righnt port: %d, value: %d", net.IP(ip).String(), rport, value)
+			log.Debugf("ip: %s, leport: %d, value: %d", net.IP(ip).String(), lport, value)
 
 		}
-		//time.Sleep(1 * time.Second)
+		time.Sleep(1 * time.Second)
 	}
+}
+
+type Mock struct {
+}
+
+func (m Mock) Insert(addr *net.TCPAddr) error {
+	return nil
+}
+
+func intToIPv4(ip uint32) net.IP {
+	res := make([]byte, 4)
+	binary.LittleEndian.PutUint32(res, ip)
+	return net.IP(res)
+}
+
+func ntohs(value uint16) uint16 {
+	return ((value & 0xff) << 8) | (value >> 8)
 }

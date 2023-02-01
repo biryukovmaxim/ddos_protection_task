@@ -1,0 +1,99 @@
+// +build ignore
+#include "bpf_endian.h"
+#include "common.h"
+
+struct pair {
+    __u32 ip;
+    __u16 port;
+    __u16 padding;
+};
+/* Define an LRU hash map for storing packet count by source IPv4 address */
+struct bpf_map_def SEC("maps") whitelist = {
+    .type = BPF_MAP_TYPE_HASH,
+    .key_size = sizeof(struct pair),
+    .value_size = sizeof(__u32),
+    .max_entries = 100,
+};
+
+// TCP header
+struct tcphdr {
+  __u16 source;
+  __u16 dest;
+  __u32 seq;
+  __u32 ack_seq;
+  union {
+    struct {
+      // Field order has been converted LittleEndiand -> BigEndian
+      // in order to simplify flag checking (no need to ntohs())
+      __u16 ns : 1,
+      reserved : 3,
+      doff : 4,
+      fin : 1,
+      syn : 1,
+      rst : 1,
+      psh : 1,
+      ack : 1,
+      urg : 1,
+      ece : 1,
+      cwr : 1;
+    };
+  };
+  __u16 window;
+  __u16 check;
+  __u16 urg_ptr;
+};
+
+
+
+SEC("xdp")
+int tcp_firewall(struct xdp_md *ctx) {
+    void *data_end = (void *)(long)ctx->data_end;
+    void *data = (void *)(long)ctx->data;
+
+    struct ethhdr *ether = data;
+    if (data + sizeof(*ether) > data_end) {
+        return XDP_ABORTED;
+    }
+     if (ether->h_proto != 0x08) {  // htons(ETH_P_IP) -> 0x08
+        // Non IPv4
+        return XDP_PASS;
+     }
+     data += sizeof(*ether);
+     struct iphdr *ip = data;
+     if (data + sizeof(*ip) > data_end) {
+        return XDP_ABORTED;
+     }
+
+     if (ip->protocol != 0x06) {  // IPPROTO_TCP -> 6
+     // Non TCP
+        return XDP_PASS;
+     }
+    struct pair key;
+
+    data += ip->ihl * 4;
+    struct tcphdr *tcp = data;
+    if (data + sizeof(*tcp) > data_end) {
+       return XDP_ABORTED;
+    }
+
+    key.ip = ip->saddr;
+    key.port = bpf_htons(tcp->source);
+    key.padding = 0;
+
+    if (!(tcp->syn)) {
+       return XDP_PASS;
+    }
+
+    __u16 dest = 5051;
+    if (bpf_htons(tcp->dest) != dest) {
+        return XDP_PASS;
+    }
+
+    u32 *value = bpf_map_lookup_elem(&whitelist, &key);
+    if (value) {
+        return XDP_PASS;
+    }
+
+    return XDP_DROP;
+}
+char _license[] SEC("license") = "GPL";

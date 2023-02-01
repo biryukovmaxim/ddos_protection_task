@@ -16,9 +16,7 @@ func NewAdapter(Map *ebpf.Map) *Adapter {
 }
 
 func (a *Adapter) Insert(addr *net.TCPAddr) error {
-	v := [4]byte{1, 0, 0, 0}
-
-	return a.m.Put(*convert(addr), v)
+	return a.m.Put(*convert(addr), [4]byte{})
 }
 
 func (a *Adapter) Delete(addr *net.TCPAddr) error {
@@ -32,9 +30,22 @@ func convert(addr *net.TCPAddr) *[8]byte {
 	} else {
 		buf = addr.IP[:]
 	}
-	buf = binary.BigEndian.AppendUint16(buf, uint16(addr.Port))
+	buf = binary.BigEndian.AppendUint16(buf, HostToNetShort(uint16(addr.Port)))
 	buf = binary.BigEndian.AppendUint16(buf, 0)
 	fixed := (*[8]byte)(buf)
 
 	return fixed
+}
+
+func HostToNetLong(i uint32) uint32 {
+	b := make([]byte, 4)
+	binary.LittleEndian.PutUint32(b, i)
+	return binary.BigEndian.Uint32(b)
+}
+
+// HostToNetShort converts a 16-bit integer from host to network byte order, aka "htons"
+func HostToNetShort(i uint16) uint16 {
+	b := make([]byte, 2)
+	binary.LittleEndian.PutUint16(b, i)
+	return binary.BigEndian.Uint16(b)
 }

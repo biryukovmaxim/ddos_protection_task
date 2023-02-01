@@ -3,6 +3,7 @@ package challenge
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"net"
 	"time"
 )
@@ -60,42 +61,42 @@ func (c *Client) sendAndCheckSolution(hash []byte, nonce uint64) (success bool, 
 }
 
 func (c *Client) Connect(challengeServerAddress, address string) (*net.TCPConn, error) {
-	var err error
-	//udpServer, err := net.ResolveUDPAddr("udp", challengeServerAddress)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//
-	//c.conn, err = net.DialUDP("udp", c.localAddr, udpServer)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//defer c.conn.Close()
-	//challenge, myAddress, err := c.requestChallenge()
-	//if err != nil {
-	//	return nil, err
-	//}
-	//
-	//hash, nonce, err := c.challengeResolveFn(challenge, myAddress.String())
-	//if err != nil {
-	//	return nil, err
-	//}
-	//successful, err := c.sendAndCheckSolution(hash, nonce)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//if !successful {
-	//	return nil, fmt.Errorf("solution is not successful")
-	//}
-	//c.conn.Close()
+	//var err error
+	udpServer, err := net.ResolveUDPAddr("udp", challengeServerAddress)
+	if err != nil {
+		return nil, err
+	}
+
+	c.conn, err = net.DialUDP("udp", c.localAddr, udpServer)
+	if err != nil {
+		return nil, err
+	}
+	defer c.conn.Close()
+	challenge, myAddress, err := c.requestChallenge()
+	if err != nil {
+		return nil, err
+	}
+
+	hash, nonce, err := c.challengeResolveFn(challenge, myAddress.String())
+	if err != nil {
+		return nil, err
+	}
+	successful, err := c.sendAndCheckSolution(hash, nonce)
+	if err != nil {
+		return nil, err
+	}
+	if !successful {
+		return nil, fmt.Errorf("solution is not successful")
+	}
+	c.conn.Close()
 	var conn net.Conn
 	for i := 0; i < 20; i++ {
 		dialer := net.Dialer{
-			Timeout: 3 * time.Second,
-			//LocalAddr: myAddress,
+			Timeout:   3 * time.Second,
+			LocalAddr: myAddress,
 		}
 		time.Sleep(1 * time.Second)
-		//fmt.Printf("calling tcp from address %s\n", myAddress.String())
+		fmt.Printf("calling tcp from address %s\n", myAddress.String())
 		conn, err = dialer.Dial("tcp", address)
 		if err != nil {
 			continue
