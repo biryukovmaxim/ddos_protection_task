@@ -10,4 +10,3 @@ FROM alpine as runner
 COPY --from=builder /app/client /app/client
 CMD ["/app/client"]
 #CMD ["sleep","3600"]
-

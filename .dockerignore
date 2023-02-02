@@ -1,5 +1,0 @@
-!bpf/tcp_firewall/target/bpf/programs/firewall/firewall.elf
-!cmd/*
-!pkg/*
-!go.*
-*
