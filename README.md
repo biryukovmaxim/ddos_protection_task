@@ -33,4 +33,5 @@ docker build -f ./docker/client/Dockerfile -t 'client:02022023' .
 ### Client run
 
 ```
-docker run --net host --env CHALLENGE_ADDRESS=localhost:1053 --env DEST=localhost:5051 client:02022023```
+docker run --net host --env CHALLENGE_ADDRESS=localhost:1053 --env DEST=localhost:5051 client:02022023
+```
