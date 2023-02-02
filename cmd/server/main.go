@@ -6,6 +6,7 @@ import (
 	_ "crypto/sha256"
 	"encoding/binary"
 	"fmt"
+	"math/rand"
 	"net"
 	"sync"
 	"time"
@@ -20,6 +21,20 @@ import (
 	"github.com/cilium/ebpf/rlimit"
 	log "github.com/sirupsen/logrus"
 )
+
+var Quotes = []string{
+	"All saints who remember to keep and do these sayings, " +
+		"walking in obedience to the commandments, " +
+		"shall receive health in their navel and marrow to their bones",
+
+	"And shall find wisdom and great treasures of knowledge, even hidden treasures",
+
+	"And shall run and not be weary, and shall walk and not faint",
+
+	"And I, the Lord, give unto them a promise, " +
+		"that the destroying angel shall pass by them, " +
+		"as the children of Israel, and not slay them",
+}
 
 func init() {
 	log.SetFormatter(&log.TextFormatter{
@@ -148,7 +163,7 @@ func handleRequest(conn net.Conn, p *bpf_map_adapter.Adapter) {
 	log.Debug("new tcp connection")
 	remoteAddr := conn.RemoteAddr().String()
 	log.Debug(remoteAddr)
-	fmt.Fprintln(conn, "Hello, World!")
+	fmt.Fprintln(conn, Quotes[rand.Intn(4)])
 }
 
 func debugMap(p *ebpf.Map) {
