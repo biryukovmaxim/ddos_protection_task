@@ -4,9 +4,7 @@ import (
 	"bufio"
 	"crypto"
 	_ "crypto/sha256"
-	"fmt"
 	"os"
-	"time"
 
 	"ddos_protection_task/pkg/challenge"
 	"ddos_protection_task/pkg/hashcash"
@@ -21,8 +19,8 @@ var (
 
 func init() {
 	log.SetFormatter(&log.TextFormatter{
-		//TimestampFormat: "2006-01-02 15:04:05",
-		FullTimestamp: true,
+		TimestampFormat: "2006-01-02 15:04:05",
+		FullTimestamp:   true,
 	})
 	log.SetLevel(log.DebugLevel)
 }
@@ -32,17 +30,16 @@ func main() {
 		return hashcash.NewHashcash(challengeBts, myAddress, challenge.Difficulty, crypto.SHA256).Compute()
 	}
 	client := challenge.NewClient(nil, challengeResolveFn)
-	time.Sleep(5 * time.Second)
 	conn, err := client.Connect(challengeAddress, destination)
 	if err != nil {
 		panic(err)
 	}
 	defer conn.Close()
-	fmt.Println("connected")
+	log.Debug("client connected")
 	message, err := bufio.NewReader(conn).ReadString('\n')
 	if err != nil {
-		fmt.Println(err)
+		log.WithError(err).Fatal("reading message")
 		return
 	}
-	fmt.Println(message)
+	log.Infof("get message: %s", message)
 }

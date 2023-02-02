@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 )
 
 type Client struct {
@@ -89,19 +91,15 @@ func (c *Client) Connect(challengeServerAddress, address string) (*net.TCPConn, 
 		return nil, fmt.Errorf("solution is not successful")
 	}
 	c.conn.Close()
-	var conn net.Conn
-	for i := 0; i < 20; i++ {
-		dialer := net.Dialer{
-			Timeout:   3 * time.Second,
-			LocalAddr: myAddress,
-		}
-		time.Sleep(1 * time.Second)
-		fmt.Printf("calling tcp from address %s\n", myAddress.String())
-		conn, err = dialer.Dial("tcp", address)
-		if err != nil {
-			continue
-		}
-		return conn.(*net.TCPConn), nil
+
+	dialer := net.Dialer{
+		Timeout:   3 * time.Second,
+		LocalAddr: myAddress,
+	}
+	log.Infof("calling tcp from address %s", myAddress.String())
+	conn, err := dialer.Dial("tcp", address)
+	if err != nil {
+		return nil, err
 	}
 
 	return conn.(*net.TCPConn), nil

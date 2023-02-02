@@ -5,6 +5,7 @@ import (
 	"net"
 
 	"github.com/cilium/ebpf"
+	log "github.com/sirupsen/logrus"
 )
 
 type Adapter struct {
@@ -16,10 +17,12 @@ func NewAdapter(Map *ebpf.Map) *Adapter {
 }
 
 func (a *Adapter) Insert(addr *net.TCPAddr) error {
+	log.Debugf("insert address to map: %s", addr.String())
 	return a.m.Put(*convert(addr), [4]byte{})
 }
 
 func (a *Adapter) Delete(addr *net.TCPAddr) error {
+	log.Debugf("delete address from map: %s", addr.String())
 	return a.m.Delete(*convert(addr))
 }
 

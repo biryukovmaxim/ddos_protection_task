@@ -173,20 +173,3 @@ func debugMap(p *ebpf.Map) {
 		time.Sleep(1 * time.Second)
 	}
 }
-
-type Mock struct {
-}
-
-func (m Mock) Insert(addr *net.TCPAddr) error {
-	return nil
-}
-
-func intToIPv4(ip uint32) net.IP {
-	res := make([]byte, 4)
-	binary.LittleEndian.PutUint32(res, ip)
-	return net.IP(res)
-}
-
-func ntohs(value uint16) uint16 {
-	return ((value & 0xff) << 8) | (value >> 8)
-}
