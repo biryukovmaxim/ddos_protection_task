@@ -1,15 +1,12 @@
 package main
 
 import (
-	"bytes"
 	"crypto"
 	_ "crypto/sha256"
-	"encoding/binary"
 	"fmt"
 	"math/rand"
 	"net"
 	"sync"
-	"time"
 
 	"ddos_protection_task/bpf/xdp_firewall"
 	"ddos_protection_task/internal/bpf_map_adapter"
@@ -97,7 +94,7 @@ func main() {
 	}
 	defer listener.Close()
 
-	go debugMap(whitelist)
+	//go debugMap(whitelist)
 	whitelistAdapter := bpf_map_adapter.NewAdapter(whitelist)
 
 	wg := &sync.WaitGroup{}
@@ -166,25 +163,26 @@ func handleRequest(conn net.Conn, p *bpf_map_adapter.Adapter) {
 	fmt.Fprintln(conn, Quotes[rand.Intn(4)])
 }
 
-func debugMap(p *ebpf.Map) {
-	for {
-		iterator := p.Iterate()
-		var (
-			key   [8]byte
-			value uint32
-		)
-
-		for iterator.Next(&key, &value) {
-			reader := bytes.NewReader(key[:])
-			ip := make([]byte, 4)
-			reader.Read(ip)
-			portBts := make([]byte, 2)
-			reader.Read(portBts)
-			lport := binary.LittleEndian.Uint16(portBts)
-
-			log.Debugf("ip: %s, leport: %d, value: %d", net.IP(ip).String(), lport, value)
-
-		}
-		time.Sleep(1 * time.Second)
-	}
-}
+//
+//func debugMap(p *ebpf.Map) {
+//	for {
+//		iterator := p.Iterate()
+//		var (
+//			key   [8]byte
+//			value uint32
+//		)
+//
+//		for iterator.Next(&key, &value) {
+//			reader := bytes.NewReader(key[:])
+//			ip := make([]byte, 4)
+//			reader.Read(ip)
+//			portBts := make([]byte, 2)
+//			reader.Read(portBts)
+//			lport := binary.LittleEndian.Uint16(portBts)
+//
+//			log.Debugf("ip: %s, leport: %d, value: %d", net.IP(ip).String(), lport, value)
+//
+//		}
+//		time.Sleep(1 * time.Second)
+//	}
+//}
