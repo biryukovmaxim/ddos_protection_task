@@ -14,7 +14,6 @@ import (
 	"ddos_protection_task/pkg/challenge"
 
 	"github.com/cilium/ebpf"
-	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/rlimit"
 	log "github.com/sirupsen/logrus"
 )
@@ -48,49 +47,49 @@ type FirewallEbpfProgram interface {
 }
 
 func main() {
-	iface, err := net.InterfaceByName("lo")
-	if err != nil {
-		log.WithError(err).Fatalf("lookup network iface %q", "lo")
-	}
+	//iface, err := net.InterfaceByName("lo")
+	//if err != nil {
+	//	log.WithError(err).Panicf("lookup network iface %q", "lo")
+	//}
 	inerfaces, err := net.Interfaces()
 	if err != nil {
-		log.WithError(err).Fatal("getting net interfaces")
+		log.WithError(err).Panic("getting net interfaces")
 	}
 	log.Debugf("%+v", inerfaces)
 	if err := rlimit.RemoveMemlock(); err != nil {
-		log.WithError(err).Fatal("set rlimit")
+		log.WithError(err).Panic("set rlimit")
 	}
 	var (
 		firewall FirewallEbpfProgram
 	)
 	firewall, err = xdp_firewall.NewFirewallProgram()
 	if err != nil {
-		log.WithError(err).Fatalf("loading bpf program")
+		log.WithError(err).Panicf("loading bpf program")
 	}
 	defer firewall.Close()
 
 	whitelist, err := firewall.Whitelist()
 	if err != nil {
-		log.WithError(err).Fatalf("loading whitelist map")
+		log.WithError(err).Panicf("loading whitelist map")
 	}
 	defer whitelist.Close()
 	program, err := firewall.Program()
 	if err != nil {
-		log.WithError(err).Fatalf("loading program")
+		log.WithError(err).Panicf("loading program")
 	}
 	defer program.Close()
-	l, err := link.AttachXDP(link.XDPOptions{
-		Program:   program,
-		Interface: iface.Index,
-	})
-	if err != nil {
-		log.WithError(err).Fatalf("link program")
-	}
-	defer l.Close()
+	//l, err := link.AttachXDP(link.XDPOptions{
+	//	Program:   program,
+	//	Interface: iface.Index,
+	//})
+	//if err != nil {
+	//	log.WithError(err).Panicf("link program")
+	//}
+	//defer l.Close()
 
 	listener, err := net.Listen("tcp", "localhost:5051")
 	if err != nil {
-		log.WithError(err).Fatalf("start listeing")
+		log.WithError(err).Panicf("start listeing")
 	}
 	defer listener.Close()
 
@@ -116,7 +115,7 @@ func main() {
 	server := challenge.NewServer(vf)
 	udpServer, err := net.ListenPacket("udp", ":1053")
 	if err != nil {
-		log.Fatal(err)
+		log.Panic(err)
 	}
 	defer udpServer.Close()
 	log.Info("start listening incoming udp frames")

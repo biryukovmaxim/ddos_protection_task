@@ -3,6 +3,7 @@ package hashcash
 import (
 	"bytes"
 	"crypto"
+	"math/bits"
 	"strconv"
 
 	log "github.com/sirupsen/logrus"
@@ -67,12 +68,13 @@ func NewHashcash(challenge []byte, uniq string, difficulty int, hashFunc crypto.
 }
 
 func CheckDifficulty(hash []byte, difficulty int) bool {
-	for i := 0; i < len(hash); i++ {
-		for j := 7; j >= 0; j-- {
-			if (hash[i]>>uint(j))&1 != 0 {
-				return difficulty <= 8*i+7-j
-			}
+	var zeroes int
+	for _, b := range hash {
+		z := bits.LeadingZeros8(b)
+		zeroes += z
+		if z != 8 || zeroes >= difficulty {
+			break
 		}
 	}
-	return true
+	return zeroes > difficulty
 }

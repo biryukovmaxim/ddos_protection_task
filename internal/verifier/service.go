@@ -39,35 +39,25 @@ func (s *Service) CreateChallenge(socket string) ([]byte, error) {
 }
 
 func (s *Service) CheckSolution(addr net.UDPAddr, hash []byte, nonce uint64) (bool, error) {
-	var (
-		successful  bool
-		notFound    bool
-		insertedErr error
-	)
-
-	s.challenges.RemoveCb(addr.String(), func(key string, challenge []byte, exists bool) bool {
-		if !exists {
-			notFound = true
-			return false
-		}
-		hk := hashcash.NewHashcash(challenge, addr.String(), s.difficulty, s.hashFunc)
-		successful = hk.Verify(hash, nonce)
-		tcp := &net.TCPAddr{
-			IP:   addr.IP,
-			Port: addr.Port,
-			Zone: addr.Zone,
-		}
-		insertedErr = s.wl.Insert(tcp)
-		if insertedErr != nil {
-			return false
-		}
-		return successful
-	})
-	if notFound {
+	challenge, exist := s.challenges.Get(addr.String())
+	if !exist {
 		return false, fmt.Errorf("challenge for %q not found", addr.String())
 	}
-	if insertedErr != nil {
-		return false, insertedErr
+	hk := hashcash.NewHashcash(challenge, addr.String(), s.difficulty, s.hashFunc)
+	successful := hk.Verify(hash, nonce)
+	if !successful {
+		return false, nil
 	}
-	return successful, nil
+	tcp := &net.TCPAddr{
+		IP:   addr.IP,
+		Port: addr.Port,
+		Zone: addr.Zone,
+	}
+	if err := s.wl.Insert(tcp); err != nil {
+		return false, err
+	}
+
+	s.challenges.Remove(addr.String())
+
+	return true, nil
 }
