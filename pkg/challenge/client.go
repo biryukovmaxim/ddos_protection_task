@@ -13,10 +13,10 @@ import (
 type Client struct {
 	localAddr          *net.UDPAddr
 	conn               *net.UDPConn
-	challengeResolveFn func(challenge []byte, myAddress string) (hash []byte, nonce uint64, err error)
+	challengeResolveFn func(challenge []byte, myAddress *[6]byte) (hash []byte, nonce uint64, err error)
 }
 
-func NewClient(localAddr *net.UDPAddr, challengeResolveFn func(challenge []byte, myAddress string) (hash []byte, nonce uint64, err error)) *Client {
+func NewClient(localAddr *net.UDPAddr, challengeResolveFn func(challenge []byte, myAddress *[6]byte) (hash []byte, nonce uint64, err error)) *Client {
 	return &Client{localAddr: localAddr, challengeResolveFn: challengeResolveFn}
 }
 
@@ -33,15 +33,15 @@ func (c *Client) requestChallenge() ([]byte, *net.TCPAddr, error) {
 	reader := bytes.NewReader(buf)
 	_, _ = reader.ReadByte()
 
-	challenge := make([]byte, ChallengeSize)
-	_, _ = reader.Read(challenge)
-
 	ip := make(net.IP, 4)
 	_, _ = reader.Read(ip)
 	portBts := make([]byte, 2)
 	_, _ = reader.Read(portBts)
-
 	port := binary.BigEndian.Uint16(portBts)
+
+	challenge := make([]byte, ChallengeSize)
+	_, _ = reader.Read(challenge)
+
 	address := &net.TCPAddr{
 		IP:   ip,
 		Port: int(port),
@@ -79,7 +79,7 @@ func (c *Client) Connect(challengeServerAddress, address string) (*net.TCPConn, 
 		return nil, err
 	}
 
-	hash, nonce, err := c.challengeResolveFn(challenge, myAddress.String())
+	hash, nonce, err := c.challengeResolveFn(challenge, Convert(myAddress))
 	if err != nil {
 		return nil, err
 	}
@@ -112,5 +112,19 @@ func encodeSolution(hash []byte, nonce uint64) []byte {
 	buf := make([]byte, 0, 1+32+8)
 	buf = append(buf, SolutionType)
 	buf = append(buf, hash...)
-	return binary.BigEndian.AppendUint64(buf, nonce)
+	b := binary.BigEndian.AppendUint64(buf, nonce)
+	return b
+}
+
+func Convert(addr *net.TCPAddr) *[6]byte {
+	var buf []byte
+	if len(addr.IP) == 16 {
+		buf = addr.IP[12:] // there are 16 bytes, we need only last 4 in case of ipv4
+	} else {
+		buf = addr.IP[:]
+	}
+	buf = binary.BigEndian.AppendUint16(buf, uint16(addr.Port))
+	fixed := (*[6]byte)(buf)
+
+	return fixed
 }

@@ -26,7 +26,7 @@ func init() {
 }
 
 func main() {
-	challengeResolveFn := func(challengeBts []byte, myAddress string) (hash []byte, nonce uint64, err error) {
+	challengeResolveFn := func(challengeBts []byte, myAddress *[6]byte) (hash []byte, nonce uint64, err error) {
 		return hashcash.NewHashcash(challengeBts, myAddress, challenge.Difficulty, crypto.SHA256).Compute()
 	}
 	client := challenge.NewClient(nil, challengeResolveFn)
