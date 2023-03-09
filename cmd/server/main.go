@@ -14,6 +14,7 @@ import (
 	"ddos_protection_task/pkg/challenge"
 
 	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/rlimit"
 	log "github.com/sirupsen/logrus"
 )
@@ -47,10 +48,10 @@ type FirewallEbpfProgram interface {
 }
 
 func main() {
-	//iface, err := net.InterfaceByName("lo")
-	//if err != nil {
-	//	log.WithError(err).Panicf("lookup network iface %q", "lo")
-	//}
+	iface, err := net.InterfaceByName("lo")
+	if err != nil {
+		log.WithError(err).Panicf("lookup network iface %q", "lo")
+	}
 	inerfaces, err := net.Interfaces()
 	if err != nil {
 		log.WithError(err).Panic("getting net interfaces")
@@ -78,14 +79,14 @@ func main() {
 		log.WithError(err).Panicf("loading program")
 	}
 	defer program.Close()
-	//l, err := link.AttachXDP(link.XDPOptions{
-	//	Program:   program,
-	//	Interface: iface.Index,
-	//})
-	//if err != nil {
-	//	log.WithError(err).Panicf("link program")
-	//}
-	//defer l.Close()
+	l, err := link.AttachXDP(link.XDPOptions{
+		Program:   program,
+		Interface: iface.Index,
+	})
+	if err != nil {
+		log.WithError(err).Panicf("link program")
+	}
+	defer l.Close()
 
 	listener, err := net.Listen("tcp", "localhost:5051")
 	if err != nil {
